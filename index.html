@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>MODI RUNNER vs DHRUV RATHEE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a2a1a 0%, #051a0a 100%);
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Poppins', monospace;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .game-fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a472a 0%, #0e2a1a 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .stats-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(12px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 20px;
+            z-index: 100;
+            border-bottom: 2px solid #ff9933;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .score-area, .best-area {
+            background: #000000bb;
+            padding: 4px 16px;
+            border-radius: 40px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            font-family: monospace;
+        }
+
+        .score-area span:first-child, .best-area span:first-child {
+            font-size: 0.8rem;
+            color: #ffcc77;
+        }
+
+        .score-value, .best-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #ffaa33;
+        }
+
+        .controls-hint {
+            background: #1e1a1acc;
+            padding: 4px 14px;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            display: flex;
+            gap: 12px;
+            color: #eee;
+        }
+
+        .controls-hint kbd {
+            background: #2c2c2c;
+            padding: 2px 8px;
+            border-radius: 30px;
+            color: #ffaa44;
+        }
+
+        .audio-control {
+            background: #000000aa;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .audio-control:hover {
+            background: #ff8800aa;
+        }
+
+        .canvas-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 60px;
+            margin-bottom: 15px;
+            padding: 0;
+            background: transparent;
+        }
+
+        canvas {
+            display: block;
+            width: 95%;
+            height: auto;
+            max-height: 70vh;
+            background: #f5f0e0;
+            cursor: pointer;
+            box-shadow: none;
+            border: none;
+            outline: none;
+        }
+
+        .restart-overlay {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: none;
+        }
+
+        .restart-btn {
+            background: #ff8800;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 50px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: 800;
+            box-shadow: 0 4px 0 #b45a1c;
+            color: #1f1b12;
+            transition: 0.05s linear;
+        }
+
+        .restart-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 #b45a1c;
+        }
+
+        @media (max-width: 750px) {
+            .stats-bar { padding: 5px 12px; }
+            .score-area, .best-area { padding: 2px 10px; }
+            .score-value, .best-value { font-size: 1.2rem; }
+            .controls-hint { font-size: 0.65rem; padding: 3px 10px; }
+            .audio-control { font-size: 0.65rem; padding: 2px 8px; }
+            .restart-btn { padding: 8px 24px; font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-fullscreen">
+    <div class="stats-bar">
+        <div class="score-area">
+            <span>🏆 SCORE</span>
+            <span class="score-value" id="fullScore">0</span>
+        </div>
+        <div class="best-area">
+            <span>⭐ BEST</span>
+            <span class="best-value" id="fullBest">0</span>
+        </div>
+        <div class="controls-hint">
+            🎮 <kbd>␣</kbd> <kbd>↑</kbd> JUMP &nbsp;|&nbsp; <kbd>R</kbd> RESTART
+        </div>
+        <div class="audio-control" id="musicToggle">
+            🎵 BGM ON
+        </div>
+    </div>
+    <div class="canvas-wrapper">
+        <canvas id="gameCanvas" width="1200" height="450"></canvas>
+    </div>
+    <div class="restart-overlay" id="restartOverlay">
+        <button class="restart-btn" id="gameRestartBtn">🔄 RESTART GAME</button>
+    </div>
+</div>
+
+<script>
+    (function(){
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const CANVAS_W = 1200;
+        const CANVAS_H = 450;
+        canvas.width = CANVAS_W;
+        canvas.height = CANVAS_H;
+        
+        const GROUND_Y = 380;           
+        const PLAYER_W = 52;            
+        const PLAYER_H = 60;            
+        const PLAYER_X = 110;           
+        
+        // Dhruv obstacle dimensions
+        const DHRUV_W = 58;
+        const DHRUV_H = 68;
+        const DHRUV_Y = GROUND_Y - DHRUV_H;
+        
+        let gameRunning = true;
+        let score = 0;
+        let highScore = localStorage.getItem('modiRunnerPhoto') ? parseInt(localStorage.getItem('modiRunnerPhoto')) : 0;
+        let frameCounter = 0;
+        let currentSpeed = 5.6;
+        const BASE_SPEED = 5.6;
+        
+        // HIGH JUMP - Modi CAN jump over Dhruv!
+        let isJumping = false;
+        let yVelocity = 0;
+        let playerY = GROUND_Y - PLAYER_H;
+        const GRAVITY = 0.58;
+        const JUMP_POWER = -12.8;
+        
+        let obstacles = [];
+        let lastSpawnFrame = 0;
+        let spawnDelay = 70;
+        
+        // Images
+        let modiPhoto = new Image();
+        let dhruvPhoto = new Image();
+        let youLostImage = new Image();
+        
+        modiPhoto.src = "https://i.ibb.co/Cs4NsQJ9/image-2026-03-11-184530957-removebg-preview.png";
+        dhruvPhoto.src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSl6imRi_ChXGPwpVZlYW9SSc3IyIW_UinTmg&s";
+        youLostImage.src = "https://i.ibb.co/WNXgYRHQ/image-2026-03-11-181741408.png";
+        
+        let modiLoaded = false;
+        let dhruvLoaded = false;
+        let youLostLoaded = false;
+        
+        modiPhoto.onload = () => { modiLoaded = true; };
+        dhruvPhoto.onload = () => { dhruvLoaded = true; };
+        youLostImage.onload = () => { youLostLoaded = true; };
+        
+        // ---------- AUDIO: bgm.mp3 (background music) AND lose.mp3 ----------
+        let bgmAudio = new Audio();
+        let loseAudio = new Audio();
+        
+        // Set sources
+        bgmAudio.src = "bgm.mp3";
+        loseAudio.src = "lose.mp3";
+        
+        // BGM settings: loop, low volume initially
+        bgmAudio.loop = true;
+        bgmAudio.volume = 0.5;
+        
+        // Flags
+        let bgmReady = false;
+        let loseReady = false;
+        let audioUnlocked = false;
+        let bgmEnabled = true;
+        
+        // Check if BGM loaded
+        bgmAudio.addEventListener('canplaythrough', () => {
+            bgmReady = true;
+            console.log("bgm.mp3 loaded and ready");
+        });
+        
+        bgmAudio.addEventListener('error', (e) => {
+            console.warn("bgm.mp3 not found. Make sure bgm.mp3 is in the same folder.");
+            bgmReady = false;
+        });
+        
+        // Check if lose.mp3 loaded
+        loseAudio.addEventListener('canplaythrough', () => {
+            loseReady = true;
+            console.log("lose.mp3 loaded and ready");
+        });
+        
+        loseAudio.addEventListener('error', (e) => {
+            console.warn("lose.mp3 not found. Make sure lose.mp3 is in the same folder.");
+            loseReady = false;
+        });
+        
+        // Function to play BGM (only if enabled and game is running)
+        function playBGM() {
+            if (!bgmEnabled) return;
+            if (!bgmReady) return;
+            if (!audioUnlocked) return;
+            if (!gameRunning) return;
+            
+            bgmAudio.play().catch(err => {
+                console.log("BGM play failed:", err);
+            });
+        }
+        
+        // Function to pause BGM
+        function pauseBGM() {
+            if (bgmAudio) {
+                bgmAudio.pause();
+            }
+        }
+        
+        // Function to stop and reset BGM (for restart)
+        function resetBGM() {
+            if (bgmAudio) {
+                bgmAudio.pause();
+                bgmAudio.currentTime = 0;
+                if (gameRunning && bgmEnabled && audioUnlocked) {
+                    playBGM();
+                }
+            }
+        }
+        
+        // Function to play lose.mp3 (stops BGM temporarily or plays over)
+        function playLoseMP3() {
+            if (!loseReady) {
+                console.log("lose.mp3 not ready");
+                return;
+            }
+            
+            // Pause BGM when losing
+            if (bgmAudio && !bgmAudio.paused) {
+                bgmAudio.pause();
+            }
+            
+            // Play lose sound
+            loseAudio.currentTime = 0;
+            loseAudio.play().catch(err => {
+                console.log("Lose sound playback failed:", err);
+            });
+        }
+        
+        // Toggle BGM on/off
+        function toggleBGM() {
+            bgmEnabled = !bgmEnabled;
+            const toggleBtn = document.getElementById('musicToggle');
+            
+            if (bgmEnabled) {
+                toggleBtn.innerHTML = '🎵 BGM ON';
+                if (gameRunning && audioUnlocked) {
+                    playBGM();
+                }
+            } else {
+                toggleBtn.innerHTML = '🔇 BGM OFF';
+                if (bgmAudio) {
+                    bgmAudio.pause();
+                }
+            }
+        }
+        
+        // Unlock audio on first user interaction
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            
+            // Try to play and immediately pause both audio elements to unlock
+            let unlockPromises = [];
+            
+            if (bgmReady) {
+                unlockPromises.push(
+                    bgmAudio.play().then(() => {
+                        bgmAudio.pause();
+                        bgmAudio.currentTime = 0;
+                    }).catch(() => {})
+                );
+            }
+            
+            if (loseReady) {
+                unlockPromises.push(
+                    loseAudio.play().then(() => {
+                        loseAudio.pause();
+                        loseAudio.currentTime = 0;
+                    }).catch(() => {})
+                );
+            }
+            
+            Promise.all(unlockPromises).finally(() => {
+                audioUnlocked = true;
+                console.log("Audio unlocked");
+                // Start BGM if game is running and enabled
+                if (gameRunning && bgmEnabled) {
+                    playBGM();
+                }
+            });
+            
+            // Remove listeners after first interaction
+            window.removeEventListener('click', unlockAudio);
+            window.removeEventListener('keydown', unlockAudio);
+            canvas.removeEventListener('click', unlockAudio);
+        }
+        
+        window.addEventListener('click', unlockAudio);
+        window.addEventListener('keydown', unlockAudio);
+        canvas.addEventListener('click', unlockAudio);
+        
+        // Animation variables for SLOW one-time zoom
+        let lostZoom = 0.25;
+        let isZooming = false;
+        const ZOOM_SPEED = 0.006;
+        
+        function startZoomAnimation() {
+            lostZoom = 0.25;
+            isZooming = true;
+        }
+        
+        function updateZoom() {
+            if (isZooming && !gameRunning) {
+                lostZoom += ZOOM_SPEED;
+                if (lostZoom >= 1.0) {
+                    lostZoom = 1.0;
+                    isZooming = false;
+                }
+            }
+        }
+        
+        // Draw functions
+        function drawModiPhoto(x, y, w, h) {
+            if (modiLoaded && modiPhoto.complete && modiPhoto.naturalWidth > 0) {
+                ctx.drawImage(modiPhoto, x, y, w, h);
+                return true;
+            }
+            ctx.fillStyle = "#E0AC69";
+            ctx.fillRect(x, y, w, h);
+            return false;
+        }
+        
+        function drawDhruvPhoto(x, y, w, h) {
+            if (dhruvLoaded && dhruvPhoto.complete && dhruvPhoto.naturalWidth > 0) {
+                ctx.drawImage(dhruvPhoto, x, y, w, h);
+                return true;
+            }
+            ctx.fillStyle = "#8B3A3A";
+            ctx.fillRect(x, y, w, h);
+            return false;
+        }
+        
+        function handleCollision() {
+            if(!gameRunning) return;
+            gameRunning = false;
+            
+            // Play lose.mp3 (this will pause BGM)
+            playLoseMP3();
+            
+            let currentScoreInt = Math.floor(score);
+            if(currentScoreInt > highScore) {
+                highScore = currentScoreInt;
+                localStorage.setItem('modiRunnerPhoto', highScore);
+            }
+            updateTopUI();
+            
+            // Start the slow one-time zoom animation
+            startZoomAnimation();
+            
+            document.getElementById('restartOverlay').style.display = 'block';
+        }
+        
+        function updateTopUI() {
+            document.getElementById('fullScore').innerText = Math.floor(score);
+            document.getElementById('fullBest').innerText = highScore;
+        }
+        
+        function updatePlayer() {
+            if(isJumping) {
+                yVelocity += GRAVITY;
+                playerY += yVelocity;
+                if(playerY >= GROUND_Y - PLAYER_H) {
+                    playerY = GROUND_Y - PLAYER_H;
+                    isJumping = false;
+                    yVelocity = 0;
+                }
+                if(playerY < 15) playerY = 15;
+            }
+        }
+        
+        function updateObstacles() {
+            for(let i=0; i<obstacles.length; i++) {
+                const obs = obstacles[i];
+                obs.x -= currentSpeed;
+                if(gameRunning) {
+                    if(PLAYER_X < obs.x + obs.w &&
+                        PLAYER_X + PLAYER_W > obs.x &&
+                        playerY < obs.y + obs.h &&
+                        playerY + PLAYER_H > obs.y) {
+                        handleCollision();
+                    }
+                }
+            }
+            obstacles = obstacles.filter(obs => obs.x + obs.w > 0);
+        }
+        
+        function trySpawnObstacle() {
+            if(!gameRunning) return;
+            let dynamicDelay = Math.max(40, spawnDelay - Math.floor(score / 350));
+            if(frameCounter - lastSpawnFrame >= dynamicDelay) {
+                obstacles.push({
+                    x: CANVAS_W,
+                    y: DHRUV_Y,
+                    w: DHRUV_W,
+                    h: DHRUV_H
+                });
+                lastSpawnFrame = frameCounter;
+                let newSpeed = BASE_SPEED + Math.floor(score / 450);
+                currentSpeed = Math.min(11.8, newSpeed);
+            }
+        }
+        
+        function updateScoreAndDifficulty() {
+            if(gameRunning) {
+                score += 0.21;
+                let spdUp = BASE_SPEED + Math.floor(score / 420);
+                currentSpeed = Math.min(11.8, spdUp);
+                spawnDelay = Math.max(44, 72 - Math.floor(score/280));
+                updateTopUI();
+            }
+        }
+        
+        function drawGround() {
+            ctx.beginPath();
+            ctx.moveTo(0, GROUND_Y);
+            ctx.lineTo(CANVAS_W, GROUND_Y);
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "#6A4A2A";
+            ctx.stroke();
+            for(let i=0; i<18; i++) {
+                let xOff = (frameCounter * 1.5 + i * 70) % CANVAS_W;
+                ctx.fillStyle = "#AA8C60";
+                ctx.fillRect(xOff, GROUND_Y+3, 18, 4);
+            }
+        }
+        
+        // Draw "You Lost" image with SLOW one-time zoom - NO BORDER
+        function drawGameOverScreen() {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.88)";
+            ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+            
+            updateZoom();
+            
+            if (youLostLoaded && youLostImage.complete && youLostImage.naturalWidth > 0) {
+                const finalWidth = CANVAS_W * 0.85;
+                const finalHeight = CANVAS_H * 0.75;
+                const imgAspect = youLostImage.naturalWidth / youLostImage.naturalHeight;
+                
+                let baseWidth = finalWidth;
+                let baseHeight = finalHeight;
+                
+                if (baseWidth / baseHeight > imgAspect) {
+                    baseHeight = baseWidth / imgAspect;
+                } else {
+                    baseWidth = baseHeight * imgAspect;
+                }
+                
+                const currentZoom = lostZoom;
+                const drawWidth = baseWidth * currentZoom;
+                const drawHeight = baseHeight * currentZoom;
+                const x = (CANVAS_W - drawWidth) / 2;
+                const y = (CANVAS_H - drawHeight) / 2;
+                
+                ctx.drawImage(youLostImage, x, y, drawWidth, drawHeight);
+            } else {
+                ctx.font = "bold 48px monospace";
+                ctx.fillStyle = "#FF5555";
+                ctx.fillText("YOU LOST", CANVAS_W/2 - 100, CANVAS_H/2);
+            }
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+            let grad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+            grad.addColorStop(0, "#cbe5fe");
+            grad.addColorStop(1, "#eef0cf");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, CANVAS_W, GROUND_Y-5);
+            
+            drawGround();
+            
+            for(let obs of obstacles) {
+                drawDhruvPhoto(obs.x, obs.y, obs.w, obs.h);
+            }
+            
+            drawModiPhoto(PLAYER_X, playerY, PLAYER_W, PLAYER_H);
+            
+            if(gameRunning && !isJumping && frameCounter % 8 < 3) {
+                ctx.fillStyle = "#C0A070";
+                ctx.beginPath();
+                ctx.ellipse(PLAYER_X+20, GROUND_Y+4, 5, 2, 0, 0, Math.PI*2);
+                ctx.fill();
+            }
+            
+            ctx.font = "bold 20px 'Courier New'";
+            ctx.fillStyle = "#2D3E2B";
+            ctx.fillText("SCORE: "+Math.floor(score), CANVAS_W-140, 45);
+            
+            if(!gameRunning) {
+                drawGameOverScreen();
+            }
+        }
+        
+        function updateGame() {
+            if(gameRunning) {
+                updatePlayer();
+                updateObstacles();
+                trySpawnObstacle();
+                updateScoreAndDifficulty();
+                frameCounter++;
+            }
+        }
+        
+        function restartGame() {
+            gameRunning = true;
+            score = 0;
+            currentSpeed = BASE_SPEED;
+            obstacles = [];
+            isJumping = false;
+            playerY = GROUND_Y - PLAYER_H;
+            yVelocity = 0;
+            frameCounter = 0;
+            lastSpawnFrame = 0;
+            spawnDelay = 70;
+            updateTopUI();
+            
+            lostZoom = 0.25;
+            isZooming = false;
+            
+            document.getElementById('restartOverlay').style.display = 'none';
+            
+            // Restart BGM
+            if (bgmAudio) {
+                bgmAudio.pause();
+                bgmAudio.currentTime = 0;
+                if (bgmEnabled && audioUnlocked) {
+                    playBGM();
+                }
+            }
+        }
+        
+        function performJump() {
+            if(!gameRunning) {
+                restartGame();
+                return;
+            }
+            if(!isJumping && playerY >= GROUND_Y - PLAYER_H - 1) {
+                isJumping = true;
+                yVelocity = JUMP_POWER;
+            }
+        }
+        
+        function handleKey(e) {
+            const key = e.key;
+            if(key === 'ArrowUp' || key === ' ' || key === 'Space') {
+                e.preventDefault();
+                performJump();
+            }
+            if(key === 'r' || key === 'R') {
+                e.preventDefault();
+                restartGame();
+            }
+        }
+        
+        window.addEventListener('keydown', handleKey);
+        canvas.addEventListener('click', (e) => {
+            e.preventDefault();
+            performJump();
+        });
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            performJump();
+        });
+        
+        document.getElementById('gameRestartBtn').addEventListener('click', () => {
+            restartGame();
+        });
+        
+        // Music toggle button
+        document.getElementById('musicToggle').addEventListener('click', toggleBGM);
+        
+        updateTopUI();
+        restartGame();
+        
+        function animate() {
+            updateGame();
+            draw();
+            requestAnimationFrame(animate);
+        }
+        animate();
+        
+        console.log("Game ready - NO borders | HIGH JUMP over Dhruv | Slow zoom on 'You Lost'");
+        console.log("🎵 Plays bgm.mp3 (looping background music) and lose.mp3 on collision");
+        console.log("💡 Make sure 'bgm.mp3' and 'lose.mp3' are in the same folder as this HTML file");
+        console.log("🔊 Click anywhere to enable audio, then BGM will start automatically");
+    })();
+</script>
+</body>
+</html>
